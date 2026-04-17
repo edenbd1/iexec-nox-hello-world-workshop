@@ -1,204 +1,190 @@
-# Workshop Nox Hello World — 30 min
+# Workshop Nox Hello World — Notes de présentation (25–30 min)
+
+**Public cible** : développeurs Solidity débutants/intermédiaires curieux de confidentialité on-chain.
+
+**Promesse** : « En 30 minutes, vous aurez transformé un smart contract banal en smart contract **confidentiel** déployé sur Arbitrum Sepolia, avec des soldes chiffrés de bout en bout. »
 
 **Source** : https://docs.iex.ec/nox-protocol/getting-started/hello-world
-
-**Objectif** : Faire transformer aux participants un smart contract classique en **smart contract confidentiel** grâce à Nox. À la fin, ils auront déployé sur Arbitrum Sepolia un PiggyBank où le **solde et les montants sont chiffrés**, mais tout le reste (adresses, appels) reste public.
-
----
-
-## Pitch en une phrase
-
-> « Nox permet d'écrire des contrats Solidity classiques dans lesquels certaines valeurs (soldes, montants…) vivent chiffrées, traitées off-chain dans des enclaves TEE Intel TDX, tout en restant **composables avec n'importe quel DeFi**. »
-
-**Important à dire** : Nox **n'est pas de la FHE**. C'est du calcul confidentiel basé sur des **TEE hardware** (Intel TDX). Les types comme `euint256` sont en réalité des **handles** — des pointeurs 32-byte vers des données chiffrées stockées off-chain.
+**Repo à partager** : https://github.com/edenbd1/iexec-nox-hello-world-workshop
 
 ---
 
-## Timing global
+## Timing au cordeau
 
-| Segment | Durée | Contenu |
-|---|---|---|
-| 0. Intro & concepts | 5 min | Pourquoi Nox, les 3 briques (handles, ACLs, TEE) |
-| 1. Le contrat classique | 3 min | PiggyBank normal, montrer ce qui fuit |
-| 2. Conversion en Nox | 12 min | `euint256`, `Nox.fromExternal`, ACL |
-| 3. Déploiement Remix | 5 min | Arbitrum Sepolia, MetaMask |
-| 4. Interaction via widget | 4 min | Chiffrer un montant, deposit, decrypt balance |
-| 5. Q&A | 1 min | - |
+| # | Segment | Durée | Cumul |
+|---|---|---|---|
+| 0 | Accueil + contexte (pourquoi confidentiel) | **3 min** | 3 |
+| 1 | Le contrat classique + la fuite de donnée | **4 min** | 7 |
+| 2 | Conversion en Nox (live-coding diff) | **10 min** | 17 |
+| 3 | Déploiement Remix sur Arbitrum Sepolia | **4 min** | 21 |
+| 4 | Interaction : encrypt / deposit / decrypt | **5 min** | 26 |
+| 5 | Récap + Q&A | **3 min** | 29 |
 
----
-
-## Prérequis participants (à leur dire AVANT)
-
-- **MetaMask** installé
-- Réseau **Arbitrum Sepolia** ajouté dans MetaMask (RPC : `https://sepolia-rollup.arbitrum.io/rpc`, chainId 421614)
-- Un peu de **ETH Arbitrum Sepolia** (faucet : https://faucet.quicknode.com/arbitrum/sepolia ou https://www.alchemy.com/faucets/arbitrum-sepolia)
-- **Remix** dans le navigateur : https://remix.ethereum.org
-
-Aucune installation locale nécessaire. Tout se passe dans Remix + la doc.
+Budget buffer : 1 min. Si ça glisse, couper en priorité le "live-coding" du 2 pour projeter directement la version finale.
 
 ---
 
-## 0. Intro — 5 min
+## Avant de démarrer (checklist 5 min avant)
 
-**Script** :
+- [ ] Laptop chargé, mode "Ne pas déranger" activé
+- [ ] Remix ouvert : https://remix.ethereum.org
+- [ ] Doc Hello World ouverte dans un second onglet : https://docs.iex.ec/nox-protocol/getting-started/hello-world (pour le widget encrypt/decrypt)
+- [ ] Arbiscan Sepolia ouvert : https://sepolia.arbiscan.io
+- [ ] MetaMask connecté, sur Arbitrum Sepolia, ≥0.01 ETH
+- [ ] Un **ConfidentialPiggyBank déjà déployé de secours** (au cas où le déploiement en live rate) — garder l'adresse dans un sticky note local
+- [ ] Slack/Discord fermé, notifications OFF
 
-> « La blockchain est transparente par design. C'est génial pour le trustless, catastrophique pour l'adoption institutionnelle : aucun fonds ne va déployer 100M$ dans un protocole qui expose ses ratios de collatéral et ses positions en clair.
+---
+
+## 0. Accueil — 3 min
+
+**À projeter** : slide "Nox Hello World" + lien du repo.
+
+**Script (à peu près mot pour mot)** :
+
+> « Salut tout le monde, on a 30 minutes chrono. À la fin, vous aurez un smart contract Solidity déployé sur Arbitrum Sepolia dans lequel **personne — pas moi, pas l'explorer, pas un nœud RPC — ne peut lire le solde**. Seul le propriétaire peut le déchiffrer. Et pourtant, le contrat reste **totalement composable** avec n'importe quel protocole DeFi.
 >
-> Nox résout ça. On écrit du Solidity **quasi-normal**, mais certaines valeurs sont chiffrées. Les calculs se font dans des **enclaves TEE Intel TDX** — des zones hardware où même le propriétaire du serveur ne peut pas lire la mémoire.
+> Le truc qu'on va utiliser s'appelle **Nox**. C'est un protocole de iExec qui combine du Solidity classique avec des enclaves **TEE Intel TDX** — du hardware où même l'admin du serveur ne peut pas lire la mémoire.
 >
-> Trois concepts à retenir :
+> Petite précision importante : Nox c'est de la **confidentialité, pas de l'anonymat**. Votre adresse wallet reste visible, les appels de fonction aussi. Ce qui est caché, c'est uniquement les **valeurs** que vous choisissez de chiffrer — typiquement des montants, des soldes.
 >
-> 1. **Handle** : un pointeur 32 bytes qui référence une donnée chiffrée off-chain. Quand vous voyez `euint256`, c'est ça.
-> 2. **ACL** (Access Control List) : on gère on-chain qui peut déchiffrer quoi. `Nox.allow(balance, owner)` = "le owner peut voir son solde".
-> 3. **TEE enclave** : l'endroit off-chain où le vrai calcul tourne sur les données en clair, avant de ré-encrypter le résultat.
+> Trois concepts à retenir pour la suite :
 >
-> Point clé : Nox offre la **confidentialité, pas l'anonymat**. Les adresses et les appels de fonction restent visibles on-chain. Seules **les valeurs encryptées** (soldes, montants) sont privées. »
-
-**À montrer** : ouvrir https://docs.iex.ec/nox-protocol/getting-started/hello-world
+> 1. **Handle** : un pointeur 32 bytes qui référence une donnée chiffrée off-chain. Chaque fois que vous verrez `euint256` dans le code, c'est ça — un handle vers un `uint256` chiffré.
+> 2. **ACL** : les droits de déchiffrement, gérés on-chain. `Nox.allow(handle, alice)` = "Alice peut déchiffrer cette valeur".
+> 3. **TEE enclave** : l'endroit off-chain où le vrai calcul tourne sur les données en clair, avant de ré-encrypter le résultat. C'est de l'Intel TDX, pas de la FHE.
+>
+> On y va. »
 
 ---
 
-## 1. Le contrat classique — 3 min
+## 1. Le contrat classique + la fuite — 4 min
 
-**Script** :
+**À projeter** : Remix, panneau File Explorer, créer un fichier `PiggyBank.sol`.
 
-> « On part d'un PiggyBank tout bête. `balance` est un `uint256` privé Solidity — mais *privé* au sens Solidity = **pas exposé par getter auto**. En réalité, n'importe qui peut lire la storage avec `eth_getStorageAt`. C'est le problème. »
+**Live action** :
 
-**Code à projeter** :
+1. Créer `PiggyBank.sol`, coller le code :
+   ```solidity
+   // SPDX-License-Identifier: MIT
+   pragma solidity ^0.8.27;
 
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+   contract PiggyBank {
+       uint256 private balance;
+       address public owner;
 
-contract PiggyBank {
-    uint256 private balance;
-    address public owner;
+       constructor() { owner = msg.sender; }
 
-    constructor() {
-        owner = msg.sender;
-    }
+       function deposit(uint256 amount) external {
+           balance += amount;
+       }
 
-    function deposit(uint256 amount) external {
-        balance += amount;
-    }
+       function withdraw(uint256 amount) external {
+           require(msg.sender == owner);
+           require(amount <= balance);
+           balance -= amount;
+       }
 
-    function withdraw(uint256 amount) external {
-        require(msg.sender == owner);
-        require(amount <= balance);
-        balance -= amount;
-    }
+       function getBalance() external view returns (uint256) {
+           return balance;
+       }
+   }
+   ```
 
-    function getBalance() external view returns (uint256) {
-        return balance;
-    }
-}
+2. **Solidity Compiler** → version `0.8.27` → **Compile** (bien insister : pas *Compile and Run script*).
+
+3. **Deploy & Run** → Environment `Remix VM (Osaka)` → **Deploy**.
+
+4. Appeler `deposit(100)`, puis `getBalance()` → `100`.
+
+**Le moment "aha"** à dire à ce stade :
+
+> « Regardez — on a marqué `balance` comme `private`. En Solidity, `private` ça veut juste dire *"pas de getter auto-généré"*. Ça ne veut PAS dire que c'est privé au sens "caché". Je vais vous le prouver. »
+
+**Démo fuite** (30 sec, dans la console Remix en bas) :
+```javascript
+await web3.eth.getStorageAt('<adresse-contrat>', 0)
+// retourne: 0x00...064  ← 0x64 = 100 en clair !
 ```
 
-**Démo rapide** (optionnelle si le temps presse) : coller dans Remix, compiler, et montrer `eth_getStorageAt` qui lit le slot 0 avec la balance en clair.
+> « Voilà. Le solde est littéralement **posé en clair dans la storage**. N'importe qui avec accès à un nœud RPC peut le lire. C'est le problème qu'on va résoudre avec Nox. »
 
 ---
 
-## 2. Conversion en contrat Nox — 12 min (le cœur du workshop)
+## 2. Conversion en Nox — 10 min (cœur du workshop)
 
-Faire les transformations **une par une** dans Remix, en expliquant à chaque étape. Ne pas projeter la version finale d'un coup — la **construire en direct**.
+**Principe** : on fait les modifs une par une, pas d'un bloc. Chaque ligne modifiée = une explication.
 
-### 2a. Importer Nox + remplacer les types
+Créer `ConfidentialPiggyBank.sol`, et le construire progressivement. À chaque étape, projeter le diff avec le code précédent.
 
-**Script** :
-> « On importe la lib Nox, et on remplace `uint256` par `euint256` — c'est le handle chiffré. »
-
-```solidity
-import {Nox, euint256, externalEuint256} from
-  "@iexec-nox/nox-protocol-contracts/contracts/sdk/Nox.sol";
-
-contract ConfidentialPiggyBank {
-    euint256 public balance;  // était uint256 private
-    address public owner;
-```
-
-Note à dire : **`balance` est maintenant `public`** — car la valeur publique, c'est le handle (pointeur chiffré), pas le montant. Seuls les autorisés peuvent déchiffrer.
-
-### 2b. Initialiser l'état chiffré
-
-**Script** :
-> « On ne peut pas faire `balance = 0` — `balance` est un handle. On utilise `Nox.toEuint256(0)` qui chiffre 0 et renvoie un handle. »
-
-```solidity
-constructor() {
-    owner = msg.sender;
-    balance = Nox.toEuint256(0);
-}
-```
-
-### 2c. Deposit : accepter une entrée chiffrée
-
-**Script** :
-> « Le user ne peut pas envoyer un `uint256` en clair dans la tx — sinon tout le monde verrait le montant. Il envoie un **handle externe** (`externalEuint256`) + une **preuve** (`inputProof`) que ce handle est bien lié à une valeur qu'il contrôle. Le contrat valide ça avec `Nox.fromExternal()`. »
-
-```solidity
-function deposit(externalEuint256 inputHandle, bytes calldata inputProof)
-    external
-{
-    euint256 amount = Nox.fromExternal(inputHandle, inputProof);
-    balance = Nox.add(balance, amount);
-    Nox.allowThis(balance);
-    Nox.allow(balance, owner);
-}
-```
-
-**Points à expliquer** :
-- `Nox.add(balance, amount)` fait l'addition **sur les handles**, en déléguant à l'enclave TEE.
-- `Nox.allowThis(balance)` : « le contrat peut réutiliser ce nouveau handle dans un prochain appel ». Sans ça, le handle devient inutilisable.
-- `Nox.allow(balance, owner)` : « le owner peut déchiffrer son solde ».
-
-### 2d. Withdraw
-
-```solidity
-function withdraw(externalEuint256 inputHandle, bytes calldata inputProof)
-    external
-{
-    require(msg.sender == owner);
-    euint256 amount = Nox.fromExternal(inputHandle, inputProof);
-    balance = Nox.sub(balance, amount);
-    Nox.allowThis(balance);
-    Nox.allow(balance, owner);
-}
-```
-
-**À dire** :
-> « On ne peut **plus** faire `require(amount <= balance)` — les deux sont chiffrés, Solidity ne sait pas comparer. En prod on utiliserait `Nox.safeSub()` qui gère l'underflow sans fuite d'information. Pour ce workshop on garde `Nox.sub()` simple. »
-
-### 2e. Plus besoin de getBalance()
-
-`balance` étant déclaré `public`, Solidity génère un getter automatiquement qui retourne le **handle**. Pour avoir la vraie valeur, l'owner utilisera le SDK JS pour déchiffrer.
-
-### Contrat final à valider
+### 2a. Importer la lib Nox (1 min)
 
 ```solidity
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
 import {Nox, euint256, externalEuint256} from
-  "@iexec-nox/nox-protocol-contracts/contracts/sdk/Nox.sol";
+    "@iexec-nox/nox-protocol-contracts/contracts/sdk/Nox.sol";
 
 contract ConfidentialPiggyBank {
-    euint256 public balance;
-    address public owner;
+    // On continue dans un instant…
+}
+```
 
+> « On importe trois choses : la lib `Nox` qui expose les fonctions, `euint256` qui est le type *handle chiffré*, et `externalEuint256` qu'on va utiliser pour recevoir des entrées chiffrées depuis l'extérieur. »
+
+### 2b. Les variables d'état (1 min)
+
+```solidity
+    euint256 public balance;     // ⚠ avant: uint256 private
+    address public owner;
+```
+
+> « Deux changements : `uint256` devient `euint256`, et on passe **en public**. Pourquoi public ? Parce que ce qui est exposé par le getter, c'est le **handle** — un pointeur chiffré. La vraie valeur nécessite des droits ACL pour être déchiffrée. Donc autant laisser le handle accessible, ça ne fuite rien. »
+
+### 2c. Le constructor (2 min)
+
+```solidity
     constructor() {
         owner = msg.sender;
         balance = Nox.toEuint256(0);
         Nox.allowThis(balance);
         Nox.allow(balance, owner);
     }
+```
 
+> « Trois lignes clés :
+>
+> - `Nox.toEuint256(0)` : on ne peut pas faire `balance = 0` parce que `balance` est un handle, pas un int. Cette fonction chiffre `0` et renvoie le handle.
+> - `Nox.allowThis(balance)` : **le contrat lui-même** a le droit de continuer à utiliser ce handle. Si on oublie ça, au prochain `deposit`, le contrat n'aura plus le droit de lire son propre solde → tx revert.
+> - `Nox.allow(balance, owner)` : le propriétaire peut déchiffrer. »
+
+### 2d. deposit — entrée chiffrée (3 min)
+
+```solidity
     function deposit(externalEuint256 inputHandle, bytes calldata inputProof) external {
         euint256 amount = Nox.fromExternal(inputHandle, inputProof);
         balance = Nox.add(balance, amount);
         Nox.allowThis(balance);
         Nox.allow(balance, owner);
     }
+```
 
+> « Le user ne peut pas envoyer un `uint256` en clair dans la tx — sinon tout le monde verrait le montant sur Arbiscan. À la place, il envoie :
+>
+> 1. **`inputHandle`** : un pointeur vers la valeur chiffrée (la valeur a été uploadée au gateway Nox juste avant).
+> 2. **`inputProof`** : une preuve cryptographique que le handle est bien lié à une valeur qu'il contrôle.
+>
+> `Nox.fromExternal()` valide la preuve et renvoie le handle interne utilisable.
+>
+> `Nox.add(balance, amount)` : addition sur **handles chiffrés**. En pratique, l'appel émet un event qui déclenche le calcul dans l'enclave TEE. Le handle résultat est une nouvelle référence. »
+
+**Attention — à dire** :
+> « Et après chaque modif de `balance`, on refait les `allowThis` et `allow`, parce que le nouveau handle est un nouvel objet — les droits précédents ne s'y appliquent pas automatiquement. »
+
+### 2e. withdraw (1 min)
+
+```solidity
     function withdraw(externalEuint256 inputHandle, bytes calldata inputProof) external {
         require(msg.sender == owner);
         euint256 amount = Nox.fromExternal(inputHandle, inputProof);
@@ -206,79 +192,114 @@ contract ConfidentialPiggyBank {
         Nox.allowThis(balance);
         Nox.allow(balance, owner);
     }
-}
 ```
 
+> « Très similaire à `deposit`. **Mais** — regardez ce qu'il n'y a plus : le `require(amount <= balance)`. Impossible de le faire ! Les deux sont chiffrés, Solidity ne sait pas comparer. En production on utiliserait `Nox.safeSub()` qui gère l'underflow silencieusement sans leak. »
+
+### 2f. Récap visuel (2 min)
+
+**À projeter** : le contrat complet, à côté du contrat classique.
+
+> « Regardez : on est passés d'un contrat de 15 lignes vanille à un contrat confidentiel en modifiant **6 lignes**. Le reste du code, la logique, tout est préservé. C'est ça le vrai argument de Nox : **vous écrivez du Solidity presque normal**. »
+
 ---
 
-## 3. Déploiement Remix — 5 min
+## 3. Déploiement sur Arbitrum Sepolia — 4 min
 
-**Étapes à faire en live** :
+**Live action dans Remix** :
 
-1. Dans Remix, panneau **Solidity Compiler** : choisir version **0.8.27** (ou 0.8.24+), cliquer **Compile**.
-   - ⚠️ Note sur l'erreur que tu avais : ne clique **pas** sur "Compile and Run script" — c'est ce qui déclenche le message *"You have not set a script to run"*. C'est une feature Remix pour exécuter un script JS, rien à voir avec le déploiement. **Juste "Compile".**
-2. Panneau **Deploy & Run Transactions** :
-   - **Environment** : `Injected Provider - MetaMask` (ou WalletConnect)
-   - Vérifier dans MetaMask que le réseau est bien **Arbitrum Sepolia**
+1. **Solidity Compiler** → version `0.8.27` (ou +), **Enable Optimization** coché, 200 runs, **Enable viaIR** coché.
+   - Si erreur "stack too deep" → c'est viaIR qui doit être activé.
+2. **Compile** (🔁 **pas** "Compile and Run script", sinon erreur *"You have not set a script to run"*).
+3. **Deploy & Run** :
+   - Environment : `Injected Provider - MetaMask`
+   - MetaMask popup → approuver la connexion
+   - **Vérifier** dans MetaMask que le réseau est **Arbitrum Sepolia** (pas Ethereum mainnet !)
    - Contract : `ConfidentialPiggyBank`
-   - Cliquer **Deploy** → valider dans MetaMask
-3. Copier l'**adresse du contrat déployé** — elle apparaît dans "Deployed Contracts".
+   - **Deploy** → confirmer dans MetaMask
+4. Attendre ~5s la confirmation. L'adresse apparaît sous *Deployed Contracts*.
+5. **Copier l'adresse** + l'ouvrir sur https://sepolia.arbiscan.io/address/\<adresse\>
+   - Montrer : le contrat est on-chain, vérifiable, mais son stockage ne contient que des handles opaques.
 
-**Backup si ça rate** : avoir un contrat déjà déployé sous la main.
-
----
-
-## 4. Interagir : chiffrer, déposer, déchiffrer — 4 min
-
-C'est ici que ça devient visuel et que les gens réalisent ce qu'ils ont fait.
-
-**Script** :
-> « On a un contrat déployé. Pour appeler `deposit(100)`, il faut d'abord **chiffrer** le 100 et obtenir un `inputHandle` + un `inputProof`. La doc iExec fournit un widget web qui fait ça sans installer de SDK. »
-
-**Étapes** :
-
-1. Ouvrir la page https://docs.iex.ec/nox-protocol/getting-started/hello-world et scroller jusqu'au **widget intégré**.
-2. **Connect wallet** dans le widget (MetaMask, même compte).
-3. **Contract address** : coller l'adresse déployée à l'étape 3.
-4. **Encrypt** : entrer `100` → le widget retourne :
-   - `handle` (hex) → à coller dans `inputHandle` de Remix
-   - `handleProof` (hex long) → à coller dans `inputProof`
-5. Dans Remix, appeler `deposit(handle, handleProof)` → confirmer dans MetaMask.
-6. De retour dans le widget, section **Decrypt** : entrer l'adresse du contrat et le slot/handle de `balance` (appelle `balance()` dans Remix pour récupérer le handle actuel).
-7. Résultat : **100** en clair, déchiffré côté client.
-
-**Le moment "aha"** : montrer sur https://sepolia.arbiscan.io la transaction de `deposit`. Les inputs sont visibles mais **illisibles** — c'est juste de la soupe hex. Pourtant le contrat a bien additionné.
+**Backup** : si le deploy rate (pas de gas, réseau capricieux), utiliser l'adresse de secours pré-déployée.
 
 ---
 
-## 5. Clôture — 1 min
+## 4. Interagir : encrypt → deposit → decrypt — 5 min
 
-**Ce qu'on a fait** :
-- Transformé un Solidity classique en contrat confidentiel en **~20 lignes modifiées**.
-- Déployé sur Arbitrum Sepolia, une L2 Ethereum.
-- Interagi avec des valeurs chiffrées de bout en bout.
+**À projeter** : la page doc https://docs.iex.ec/nox-protocol/getting-started/hello-world scrollée jusqu'au widget intégré.
 
-**Pour aller plus loin** :
-- **ERC7984** : un token fongible avec soldes chiffrés (équivalent ERC20 confidentiel)
-- **Hardhat / Foundry** : intégrations pour tester Nox localement
-- **Use cases** : dark pools, payroll privé, vaults institutionnels
+### Encrypt (1 min)
+
+1. Dans le widget : **Connect wallet** (même MetaMask).
+2. **Contract address** : coller l'adresse déployée.
+3. **Value** : taper `100`.
+4. **Encrypt** → deux champs apparaissent :
+   - `handle` : `0x…` (32 bytes)
+   - `handleProof` : `0x…` (long)
+
+> « Ce que le widget vient de faire : il a envoyé `100` au gateway Nox via TLS. Le gateway a chiffré, stocké off-chain, renvoyé le handle + la preuve. Le plaintext `100` n'est jamais allé sur la blockchain. »
+
+### Deposit (1 min)
+
+Retour dans Remix, sur le contrat déployé :
+1. Déplier `deposit` dans *Deployed Contracts*.
+2. Coller `handle` dans `inputHandle`, coller `handleProof` dans `inputProof`.
+3. **transact** → confirmer MetaMask.
+4. Ouvrir la tx sur Arbiscan : **lire les inputs encodés**. C'est illisible, parfait.
+
+### Decrypt (2 min)
+
+1. Dans Remix, cliquer sur le getter **`balance`** → récupérer le handle actuel (0x…).
+2. Dans le widget doc, onglet **Decrypt** : coller le handle.
+3. **Decrypt** → la valeur `100` s'affiche en clair — **côté client uniquement**.
+
+> « Et voilà. La blockchain a fait `0 + 100`, sans jamais voir `100`. Le solde est on-chain, vérifiable, mais illisible sauf si vous avez la permission ACL. »
 
 ---
 
-## Checklist avant de démarrer
+## 5. Récap + Q&A — 3 min
 
-- [ ] MetaMask sur Arbitrum Sepolia, ≥0.01 ETH
-- [ ] Remix ouvert, prêt à coller du Solidity
-- [ ] Page doc Hello World ouverte dans un autre onglet (pour le widget)
-- [ ] Arbiscan Sepolia ouvert pour la démo finale
-- [ ] Contrat de secours déjà déployé au cas où le live rate
-- [ ] Le flow testé **la veille** de bout en bout
+**À dire en closing** :
+
+> « En 25 minutes on a :
+>
+> 1. Transformé un Solidity vanille en contrat confidentiel — **6 lignes modifiées**.
+> 2. Déployé sur Arbitrum Sepolia, une vraie L2 Ethereum.
+> 3. Interagi avec des valeurs chiffrées de bout en bout, sans que la blockchain voie jamais le plaintext.
+>
+> Les use cases évidents derrière : dark pools, payroll privé, vaults institutionnels, lending où le collatéral est privé. Tout ça sans casser la composabilité DeFi.
+>
+> Le repo avec tout — contrats, tests Hardhat, scripts de déploiement, notes — est là : **github.com/edenbd1/iexec-nox-hello-world-workshop**. Forkez, clonez, cassez, améliorez. »
+
+### Questions à anticiper
+
+- *« C'est vraiment sécurisé ? Intel TDX ça peut casser. »*
+  → Oui, la sécurité repose sur l'intégrité du TEE. Pareil que Phala, Oasis Sapphire. Le modèle de menace est le hardware, pas le software.
+- *« C'est plus cher en gas ? »*
+  → Modérément. Chaque op chiffrée déclenche un event + une computation off-chain. L'ordre de grandeur c'est ~2–5× un appel classique, pas 100×.
+- *« Pourquoi pas de la FHE ? »*
+  → La FHE est ~1000× plus lente aujourd'hui, incompatible avec du DeFi temps réel. Les TEE sont le bon compromis 2026.
+- *« Et si je veux comparer deux valeurs chiffrées ? »*
+  → `Nox.lt()`, `Nox.gt()`, `Nox.eq()` renvoient des `ebool`. On ne peut pas faire `if (ebool)` direct en Solidity — il faut passer par `Nox.select(cond, a, b)`.
+- *« Tests unitaires locaux possibles ? »*
+  → Les tests qui utilisent `Nox.fromExternal` ne marchent pas sur un simple hardhat node (pas de gateway). Il faut soit : un fork d'Arbitrum Sepolia (valide l'ABI + la résolution de proxy), soit déployer en vrai. Le repo inclut les deux niveaux de tests.
 
 ---
 
-## Réponses aux questions probables
+## Liens utiles (à afficher sur la slide finale)
 
-- *Pourquoi pas de la FHE ?* → Les TEE sont ~1000× plus rapides aujourd'hui. La FHE reste trop coûteuse pour du DeFi temps réel.
-- *Et si Intel TDX est cassé ?* → C'est le risque. Nox est sécurisé au niveau du hardware TEE, comme Phala, Oasis Sapphire, etc.
-- *Peut-on comparer deux valeurs chiffrées ?* → Oui, via `Nox.lt()`, `Nox.gt()`, etc., qui renvoient des `ebool`. On ne peut pas faire `if (ebool)` directement en Solidity, il faut passer par `Nox.select()`.
-- *Le gas coûte plus cher ?* → Oui modérément, car chaque opération chiffrée déclenche une interaction enclave.
+- Hello World : https://docs.iex.ec/nox-protocol/getting-started/hello-world
+- Repo workshop : https://github.com/edenbd1/iexec-nox-hello-world-workshop
+- Package Solidity : https://www.npmjs.com/package/@iexec-nox/nox-protocol-contracts
+- Package JS SDK : https://www.npmjs.com/package/@iexec-nox/handle
+- NoxCompute sur Arb Sepolia : https://sepolia.arbiscan.io/address/0xd464B198f06756a1d00be223634b85E0a731c229
+- Discord iExec : https://discord.com/invite/5TewNUnJHN
+
+---
+
+## Checklist post-workshop (ton feedback à collecter)
+
+- [ ] Combien de personnes ont réussi à déployer leur propre contrat ?
+- [ ] Quelle étape a bloqué le plus de monde ?
+- [ ] Questions qui sont revenues plusieurs fois → candidates à faire remonter en doc.
