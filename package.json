@@ -1,0 +1,40 @@
+{
+  "name": "iexec-nox-hello-world-workshop",
+  "version": "1.0.0",
+  "description": "Hands-on workshop to build a confidential PiggyBank smart contract with iExec Nox protocol",
+  "private": true,
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy-classic.ts --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploy-confidential.ts --network arbitrumSepolia",
+    "interact:sepolia": "hardhat run scripts/interact.ts --network arbitrumSepolia"
+  },
+  "keywords": [
+    "iexec",
+    "nox",
+    "confidential",
+    "solidity",
+    "workshop",
+    "arbitrum"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@typechain/hardhat": "^9.1.0",
+    "@types/chai": "^4.3.20",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.19.39",
+    "dotenv": "^16.6.1",
+    "hardhat": "^2.28.6",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@iexec-nox/handle": "^0.1.0-beta.10",
+    "@iexec-nox/nox-protocol-contracts": "^0.2.0",
+    "@openzeppelin/contracts": "^5.6.1",
+    "encrypted-types": "^0.0.4"
+  }
+}
