@@ -15,3 +15,7 @@ dist/
 .vscode/
 .idea/
 *.log
+
+# Private speaker notes — kept locally, never committed
+WORKSHOP_PLAN.md
+
