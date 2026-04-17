@@ -8,8 +8,9 @@
     "test": "hardhat test",
     "test:fork": "FORK_ARB_SEPOLIA=1 hardhat test test/e2e-fork.test.ts",
     "node": "hardhat node",
-    "deploy:local": "hardhat run scripts/deploy-classic.ts --network localhost",
-    "deploy:sepolia": "hardhat run scripts/deploy-confidential.ts --network arbitrumSepolia",
+    "deploy:piggy:local": "hardhat run scripts/deploy-classic.ts --network localhost",
+    "deploy:piggy:sepolia": "hardhat run scripts/deploy-classic.ts --network arbitrumSepolia",
+    "deploy:confidential:sepolia": "hardhat run scripts/deploy-confidential.ts --network arbitrumSepolia",
     "interact:sepolia": "hardhat run scripts/interact.ts --network arbitrumSepolia"
   },
   "keywords": [
